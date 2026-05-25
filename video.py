@@ -36,7 +36,6 @@ except:
             aruco_dict = aruco.getPredefinedDictionary(25)
         except:
             aruco_dict = None
-            print("Не удалось создать словарь Aruco")
 
 _state['aruco_dict'] = aruco_dict
 _state['aruco_params'] = aruco.DetectorParameters()
@@ -381,7 +380,6 @@ def save_corners(corners_file: str = "field_corners.json"):
         json.dump(data, f, indent=2)
     print(f"Углы сохранены в {corners_file}")
 
-
 def load_corners(corners_file: str) -> bool:
     try:
         import os
@@ -394,8 +392,6 @@ def load_corners(corners_file: str) -> bool:
                 print(f"Файл {corners_file} не найден")
                 return False
 
-        print(f"Загрузка углов из: {file_path}")
-
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
@@ -404,10 +400,8 @@ def load_corners(corners_file: str) -> bool:
         _state['field_height'] = data.get('field_height', _state['field_height'])
         _state['H'], _state['H_inv'] = compute_homography(_state['corners'])
 
-        print(f"✓ Углы успешно загружены")
         return True
     except Exception as e:
-        print(f"Ошибка при загрузке углов: {e}")
         return False
 
 
@@ -421,13 +415,6 @@ def process_camera_feed(camera_id: int = 0, single_frame: bool = False):
     if _state['corners'] is None:
         if load_corners("field_corners.json"):
             print("Углы загружены из файла")
-
-    # Если после загрузки углов все еще нет - выходим
-    if _state['corners'] is None:
-        print("\nНЕТ УГЛОВ ПОЛЯ!")
-        print("Пожалуйста, убедитесь, что файл field_corners.json существует")
-        print("или запустите программу без робота для настройки углов.")
-        return
 
     # Открываем камеру
     cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
@@ -477,17 +464,8 @@ def process_camera_feed(camera_id: int = 0, single_frame: bool = False):
             current_path = None
             if planner:
                 reset_path(planner)
-            print(f"Цель установлена: ({target_point_real[0]:.1f}, {target_point_real[1]:.1f})")
 
     cv2.setMouseCallback("Camera Feed", mouse_callback)
-
-    print("\n=== ИНСТРУКЦИЯ ===")
-    print("Кликните на кадре - построится маршрут от робота до цели")
-    print("Синий - путь Дейкстры")
-    print("Зеленый - сплайн")
-    print("Красный - аппроксимация сплайна")
-    print("Нажмите 'q' для выхода")
-    print("==================\n")
 
     while True:
         ret, frame = cap.read()
@@ -537,10 +515,6 @@ def process_camera_feed(camera_id: int = 0, single_frame: bool = False):
         if target_point_real is not None and robot_position is not None:
             if current_path is None or len(current_path) == 0:
                 current_path = find_path(planner, robot_position, target_point_real)
-                if current_path:
-                    print(f"Путь построен! Длина: {len(current_path)} точек")
-                else:
-                    print("Не удалось построить путь!")
 
         # Рисуем маршруты
         if current_path is not None and len(current_path) > 1:
@@ -578,17 +552,6 @@ def process_camera_feed(camera_id: int = 0, single_frame: bool = False):
             cv2.putText(rectified, f"Target: ({target_point_real[0]:.1f}, {target_point_real[1]:.1f})",
                         (10, info_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
             info_y += 25
-
-        # Легенда
-        legend_y = rectified.shape[0] - 80
-        cv2.putText(rectified, "Blue: Dijkstra path", (10, legend_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-        cv2.putText(rectified, "Green: Spline", (10, legend_y + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        cv2.putText(rectified, "Red: Refined path", (10, legend_y + 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-        cv2.putText(rectified, "Click on frame to set goal | 'q' - quit", (10, legend_y + 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
 
         # Отображение
         if rectified.shape[1] > 800 or rectified.shape[0] > 800:

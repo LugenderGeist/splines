@@ -56,23 +56,13 @@ def mode_robot():
 
     init_video_processor()
 
-    # ========== ДОБАВЬТЕ ЗАГРУЗКУ УГЛОВ ==========
-    # Пытаемся загрузить углы из файла
     if vp._state['corners'] is None:
         if vp.load_corners(CORNERS_FILE):
             print("Углы успешно загружены из файла")
         else:
             print("Ошибка: не удалось загрузить углы поля!")
             print("Сначала запустите режим 1 (камера) и настройте углы,")
-            print("или убедитесь, что файл field_corners.json существует.")
             return
-
-    # Дополнительная проверка: создана ли матрица гомографии
-    if vp._state['H'] is None:
-        print("Ошибка: матрица гомографии не создана!")
-        print("Проверьте файл field_corners.json или перекалибруйте углы в режиме 1.")
-        return
-    # ===========================================
 
     cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     if not cap.isOpened():
@@ -212,9 +202,6 @@ def mode_robot():
                         current_path = find_path(planner, current_robot_pos, target_point)
                         if current_path:
                             moving = True
-                            print(f"Путь построен! Длина: {len(current_path)} точек")
-                            print(f"  - Сетка Дейкстры: {DIJKSTRA_GRID_STEP} см")
-                            print(f"  - Аппроксимация сплайна: {SPLINE_REFINE_STEP} см")
                         else:
                             print("Не удалось построить путь!")
 
@@ -276,14 +263,6 @@ def mode_robot():
         if target_point:
             cv2.putText(rectified, f"Target: ({target_point[0]:.1f}, {target_point[1]:.1f})",
                         (10, info_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-        info_y += 25
-        cv2.putText(rectified, f"Dijkstra grid: {DIJKSTRA_GRID_STEP} cm, Spline refine: {SPLINE_REFINE_STEP} cm",
-                    (10, info_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
-        info_y += 20
-
-        # Легенда цветов маршрутов
-        cv2.putText(rectified, "Blue: Dijkstra path | Green: Spline | Red: Refined path",
-                    (10, rectified.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
         cv2.imshow("Robot Control", rectified)
 
@@ -293,17 +272,10 @@ def mode_robot():
             break
 
 def main():
-    print("=" * 50)
-    print("НАСТРОЙКИ ПЛАНИРОВАНИЯ:")
-    print(f"  - Сетка Дейкстры (крупная): {DIJKSTRA_GRID_STEP} см")
-    print(f"  - Аппроксимация сплайна (мелкая): {SPLINE_REFINE_STEP} см")
-    print(f"  - Соотношение: {DIJKSTRA_GRID_STEP / SPLINE_REFINE_STEP:.0f}x мельче")
-    print("=" * 50)
-    print()
-    print("1. Реальная камера (тестовый режим)")
+    print("1. Реальная камера")
     print("2. Управление роботом")
 
-    choice = input("\nВыберите режим (1 или 2): ").strip()
+    choice = input("\n1 или 2? ").strip()
 
     if choice == '1':
         mode_camera()
