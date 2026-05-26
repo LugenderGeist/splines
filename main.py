@@ -8,22 +8,18 @@ from robotino import (connect_to_robotino, send_velocity, stop_robot)
 FIELD_WIDTH = 220.0
 FIELD_HEIGHT = 220.0
 
-# ПАРАМЕТРЫ СЕТКИ ДЛЯ ПЛАНИРОВАНИЯ
-# Крупная сетка для Дейкстры (чем больше шаг, тем быстрее работает алгоритм)
-DIJKSTRA_GRID_STEP = 1.0  # см, шаг сетки для поиска пути (5-10 см оптимально)
-# Мелкая сетка для аппроксимации сплайна (чем меньше шаг, тем глаже путь)
-SPLINE_REFINE_STEP = 1.0  # см, шаг для аппроксимации сплайна (1-2 см оптимально)
+# ШАГ СЕТКИ
+STEP = 1.0
+GOAL_RADIUS = 5.0
 
 # ПРЕПЯТСТВИЯ
 EDGE_MARGIN = 5
 OBSTACLE_MIN_AREA = 800
 OBSTACLE_MAX_AREA = 500000
-THRESHOLD = 110
-ROBOT_SAFETY_RADIUS = 30.0
+THRESHOLD = 160
+ROBOT_SAFETY_RADIUS = 35.0
 ROBOT_RADIUS = 27.0
 OBSTACLE_SAFETY_MARGIN = 2.0
-
-GOAL_RADIUS = 10.0
 
 # УПРАВЛЕНИЕ
 MAX_SPEED = 0.3
@@ -41,13 +37,12 @@ CORNERS_FILE = "field_corners.json"
 def init_video_processor():
     vp.set_field_dimensions(FIELD_WIDTH, FIELD_HEIGHT)
     vp.set_obstacle_params(EDGE_MARGIN, OBSTACLE_MIN_AREA, OBSTACLE_MAX_AREA, THRESHOLD)
-    vp.set_robot_params(ROBOT_RADIUS, ROBOT_SAFETY_RADIUS, OBSTACLE_SAFETY_MARGIN, DIJKSTRA_GRID_STEP, EDGE_LIMIT_CM)
-    vp.set_spline_params(SPLINE_REFINE_STEP)
+    vp.set_robot_params(ROBOT_RADIUS, ROBOT_SAFETY_RADIUS, OBSTACLE_SAFETY_MARGIN, STEP, EDGE_LIMIT_CM)
+    vp.set_spline_params(STEP)  # тот же шаг для сплайна
 
 def mode_camera():
     init_video_processor()
     vp.process_camera_feed(camera_id=1)
-
 
 def mode_robot():
     if not connect_to_robotino():
@@ -61,7 +56,7 @@ def mode_robot():
             print("Углы успешно загружены из файла")
         else:
             print("Ошибка: не удалось загрузить углы поля!")
-            print("Сначала запустите режим 1 (камера) и настройте углы,")
+            print("Сначала запустите режим 1 (камера) и настройте углы")
             return
 
     cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
@@ -118,7 +113,7 @@ def mode_robot():
             moving = False
             rotating = False
             pending_target = None
-            current_path = None  # Сбрасываем путь при новой цели
+            current_path = None
             if planner:
                 reset_path(planner)
 
@@ -166,11 +161,11 @@ def mode_robot():
             planner = create_planner(
                 field_width=FIELD_WIDTH,
                 field_height=FIELD_HEIGHT,
-                step=DIJKSTRA_GRID_STEP,
+                step=STEP,
                 robot_radius=ROBOT_RADIUS,
                 obstacle_safety=OBSTACLE_SAFETY_MARGIN,
                 edge_limit_cm=EDGE_LIMIT_CM,
-                refine_step=SPLINE_REFINE_STEP
+                refine_step=STEP
             )
 
         update_obstacles(planner, obstacles)
@@ -188,6 +183,8 @@ def mode_robot():
                 rotating = False
                 if planner:
                     reset_path(planner)
+                stop_robot()
+                print(f"Цель достигнута!")
             else:
                 if current_path is None and not moving and not rotating:
                     current_angle = get_robot_angle(corners)
@@ -283,7 +280,6 @@ def main():
         mode_robot()
     else:
         print("Выход")
-
 
 if __name__ == "__main__":
     main()

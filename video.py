@@ -12,62 +12,47 @@ _state = {
     'H_inv': None,
     'output_size': (720, 720),
     'robot_trajectory': [],
-    'edge_margin': 20,
-    'obstacle_min_area': 500,
-    'obstacle_max_area': 5000,
-    'threshold': 100,
-    'robot_safety_radius': 15.0,
-    'robot_radius': 15.0,
-    'obstacle_safety_margin': 5.0,
-    'planning_step': 2.0,
-    'edge_limit_cm': 15.0,
-    'spline_refine_step': 1.0,
+    'edge_margin': None,
+    'obstacle_min_area': None,
+    'obstacle_max_area': None,
+    'threshold': None,
+    'robot_radius': None,
+    'robot_safety_radius': None,
+    'obstacle_safety_margin': None,
+    'planning_step': None,
+    'edge_limit_cm': None,
+    'spline_refine_step': None,
     'safety_mask': None,
+    'aruco_dict': None,
+    'aruco_params': None,
 }
 
-# Инициализация Aruco
-try:
-    aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-except:
-    try:
-        aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)
-    except:
-        try:
-            aruco_dict = aruco.getPredefinedDictionary(25)
-        except:
-            aruco_dict = None
+# ========== ИНИЦИАЛИЗАЦИЯ ==========
 
-_state['aruco_dict'] = aruco_dict
+_state['aruco_dict'] = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 _state['aruco_params'] = aruco.DetectorParameters()
 
-
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
 def set_field_dimensions(width: float, height: float):
     _state['field_width'] = width
     _state['field_height'] = height
 
-
-def set_obstacle_params(edge_margin: int = 20, min_area: int = 500,
-                        max_area: int = 5000, threshold: int = 100):
+def set_obstacle_params(edge_margin: int, min_area: int, max_area: int, threshold: int):
     _state['edge_margin'] = edge_margin
     _state['obstacle_min_area'] = min_area
     _state['obstacle_max_area'] = max_area
     _state['threshold'] = threshold
 
-
-def set_robot_params(robot_radius: float = 15.0, robot_safety_radius: float = 40.0, obstacle_safety_margin: float = 5.0,
-                     planning_step: float = 2.0, edge_limit_cm: float = 15.0):
+def set_robot_params(robot_radius: float, robot_safety_radius: float,
+                     obstacle_safety_margin: float, step: float,
+                     edge_limit_cm: float):
     _state['robot_radius'] = robot_radius
     _state['robot_safety_radius'] = robot_safety_radius
     _state['obstacle_safety_margin'] = obstacle_safety_margin
-    _state['planning_step'] = planning_step
+    _state['planning_step'] = step
     _state['edge_limit_cm'] = edge_limit_cm
 
-
-def set_spline_params(refine_step: float = 1.0):
-    """Устанавливает шаг аппроксимации для сплайна"""
-    _state['spline_refine_step'] = refine_step
-
+def set_spline_params(step: float):
+    _state['spline_refine_step'] = step
 
 # ========== КАЛИБРОВКА ==========
 def set_corners_manually(frame: np.ndarray) -> np.ndarray:
@@ -114,7 +99,6 @@ def set_corners_manually(frame: np.ndarray) -> np.ndarray:
     cv2.destroyAllWindows()
     return np.array(corners, dtype=np.float32)
 
-
 def compute_homography(corners: np.ndarray) -> tuple:
     output_size = _state['output_size']
     dst_corners = np.array([
@@ -125,14 +109,12 @@ def compute_homography(corners: np.ndarray) -> tuple:
     H_inv, _ = cv2.findHomography(dst_corners, corners)
     return H, H_inv
 
-
 def transform_coordinates(x_pixel: float, y_pixel: float) -> tuple:
     scale_x = _state['field_width'] / _state['output_size'][0]
     scale_y = _state['field_height'] / _state['output_size'][1]
     real_x = x_pixel * scale_x
     real_y = (_state['output_size'][1] - y_pixel) * scale_y
     return real_x, real_y
-
 
 # ========== ДЕТЕКЦИЯ ==========
 def detect_robot(frame: np.ndarray):
@@ -162,7 +144,6 @@ def detect_robot(frame: np.ndarray):
         real_x, real_y = transform_coordinates(center_x_rect, center_y_rect)
         return True, marker_id, (center_x_rect, center_y_rect), (real_x, real_y), marker_corners
     return False, -1, (0, 0), (0, 0), None
-
 
 def detect_obstacles(rectified_frame: np.ndarray, robot_center: tuple = None) -> list:
     edge_margin = _state['edge_margin']
@@ -300,7 +281,6 @@ def detect_obstacles(rectified_frame: np.ndarray, robot_center: tuple = None) ->
 
     return []
 
-
 # ========== ОТРИСОВКА ==========
 def draw_axes_2d(frame: np.ndarray, marker_corners: np.ndarray, axis_length: float = 60) -> np.ndarray:
     if len(marker_corners.shape) == 3:
@@ -336,7 +316,6 @@ def draw_axes_2d(frame: np.ndarray, marker_corners: np.ndarray, axis_length: flo
     cv2.circle(frame, (cx, cy), 4, (0, 0, 0), -1)
     return frame
 
-
 def draw_coordinate_axes(frame: np.ndarray, margin: int = 20, axis_length: int = 50) -> np.ndarray:
     h, w = frame.shape[:2]
     origin_x = margin
@@ -349,7 +328,6 @@ def draw_coordinate_axes(frame: np.ndarray, margin: int = 20, axis_length: int =
     cv2.putText(frame, "Y", (y_end[0] + 5, y_end[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
     cv2.circle(frame, (origin_x, origin_y), 4, (0, 0, 0), -1)
     return frame
-
 
 def draw_edge_limit(frame: np.ndarray) -> np.ndarray:
     h, w = frame.shape[:2]
@@ -366,7 +344,6 @@ def draw_edge_limit(frame: np.ndarray) -> np.ndarray:
         x_right = w - margin
         cv2.line(frame, (x_right, y), (x_right, min(y + dash_length, h - margin)), (0, 0, 0), 2)
     return frame
-
 
 def save_corners(corners_file: str = "field_corners.json"):
     if _state['corners'] is None:
@@ -404,10 +381,8 @@ def load_corners(corners_file: str) -> bool:
     except Exception as e:
         return False
 
-
 def reset_trajectory():
     _state['robot_trajectory'] = []
-
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 def process_camera_feed(camera_id: int = 0, single_frame: bool = False):
@@ -525,7 +500,7 @@ def process_camera_feed(camera_id: int = 0, single_frame: bool = False):
             # Контур робота
             robot_radius_px = int(_state['robot_radius'] / _state['field_width'] * _state['output_size'][0])
             cv2.circle(rectified, (int(robot_center_pixel[0]), int(robot_center_pixel[1])), robot_radius_px,
-                       (100, 100, 100), 2)
+                       (100, 100, 100), 1)
             # Оси робота
             rectified = draw_axes_2d(rectified, robot_corners, axis_length=50)
             # Центр робота

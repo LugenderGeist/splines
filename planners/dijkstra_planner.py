@@ -3,11 +3,14 @@ import numpy as np
 from typing import List, Tuple
 import math
 import heapq
-from scipy import interpolate
 
 def create_planner(field_width: float, field_height: float, step: float,
                    robot_radius: float, obstacle_safety: float,
-                   edge_limit_cm: float, refine_step: float = 1.0) -> dict:
+                   edge_limit_cm: float, refine_step: float = None) -> dict:
+    # Если refine_step не указан, используем тот же step
+    if refine_step is None:
+        refine_step = step
+
     grid_width = int(field_width / step) + 1
     grid_height = int(field_height / step) + 1
 
@@ -118,9 +121,6 @@ def grid_to_world(planner: dict, grid_x: int, grid_y: int) -> Tuple[float, float
 
 def build_spline_from_path(path: List[Tuple[float, float]], planner: dict = None, num_points: int = 200) -> List[
     Tuple[float, float]]:
-    """
-    Строит плавный сплайн по точкам пути Дейкстры (сглаживает, а не проходит через все точки)
-    """
     if len(path) < 3:
         return path.copy()
 
@@ -155,29 +155,24 @@ def build_spline_from_path(path: List[Tuple[float, float]], planner: dict = None
         if len(t_unique) < 3:
             return path.copy()
 
-        # Используем UnivariateSpline с параметром сглаживания s
         # Чем больше s, тем сильнее сглаживание (и тем больше сплайн отклоняется от точек)
         from scipy.interpolate import UnivariateSpline
 
         # Параметр сглаживания:
-        # - s = 0: проходит через все точки (как сейчас)
-        # - s = len(x): умеренное сглаживание
-        # - s = len(x) * 10: сильное сглаживание
-        smoothing_factor = len(x_unique) * 5  # Умеренное сглаживание
+        smoothing_factor = len(x_unique) * 5
 
         fx = UnivariateSpline(t_unique, x_unique, s=smoothing_factor)
         fy = UnivariateSpline(t_unique, y_unique, s=smoothing_factor)
 
         # Генерируем точки
         t_new = np.linspace(0, 1, num_points)
-
         x_spline = fx(t_new)
         y_spline = fy(t_new)
 
         # Собираем точки сплайна
         spline_path = list(zip(x_spline, y_spline))
 
-        # Проверяем безопасность (чтобы сплайн не врезался в препятствия)
+        # Проверяем безопасность
         if planner is not None:
             corrected_path = []
             step = planner['step']
@@ -223,7 +218,6 @@ def refine_spline_to_grid(spline_path: List[Tuple[float, float]], planner: dict)
         x1, y1 = spline_path[i]
         x2, y2 = spline_path[i + 1]
 
-        # Если это первая точка
         if i == 0:
             refined_path.append((x1, y1))
 
@@ -330,7 +324,6 @@ def find_path(planner: dict, start: Tuple[float, float], goal: Tuple[float, floa
 
 def get_velocities(planner: dict, current_x: float, current_y: float,
                    max_speed: float, kp: float, acc_speed_error: float) -> Tuple[float, float]:
-    # Используем аппроксимированный сплайн путь для более плавного движения
     path = planner['refined_path'] if planner['refined_path'] else planner['path']
 
     if not path or len(path) < 2:
@@ -381,12 +374,6 @@ def draw_planning_contours(planner: dict, frame: np.ndarray) -> np.ndarray:
 
 def draw_path_on_frame(planner: dict, frame: np.ndarray, path: List[Tuple[float, float]],
                        color: Tuple[int, int, int] = (0, 255, 0)) -> np.ndarray:
-    """
-    Рисует все три версии пути на кадре:
-    - Синий: оригинальный путь Дейкстры (толщина 3)
-    - Зеленый: сплайн (толщина 2)
-    - Красный: аппроксимированный путь (толщина 1)
-    """
     if not path or len(path) < 2:
         return frame
 
@@ -394,7 +381,7 @@ def draw_path_on_frame(planner: dict, frame: np.ndarray, path: List[Tuple[float,
     field_width = planner['field_width']
     field_height = planner['field_height']
 
-    # 1. Рисуем оригинальный путь Дейкстры (синий, толщина 3)
+    # 1. Рисуем оригинальный путь Дейкстры
     if planner['path'] and len(planner['path']) > 1:
         points_dijkstra = []
         for real_x, real_y in planner['path']:
@@ -403,9 +390,9 @@ def draw_path_on_frame(planner: dict, frame: np.ndarray, path: List[Tuple[float,
             points_dijkstra.append((x_px, y_px))
 
         for i in range(len(points_dijkstra) - 1):
-            cv2.line(frame, points_dijkstra[i], points_dijkstra[i + 1], (255, 0, 0), 3)
+            cv2.line(frame, points_dijkstra[i], points_dijkstra[i + 1], (0, 255, 0), 3)
 
-    # 3. Рисуем аппроксимированный путь (красный, толщина 1)
+    # 3. Рисуем аппроксимированный путь по сплайну
     if planner['refined_path'] and len(planner['refined_path']) > 1:
         points_refined = []
         for real_x, real_y in planner['refined_path']:
@@ -415,14 +402,4 @@ def draw_path_on_frame(planner: dict, frame: np.ndarray, path: List[Tuple[float,
 
         for i in range(len(points_refined) - 1):
             cv2.line(frame, points_refined[i], points_refined[i + 1], (0, 0, 255), 2)
-
-    # Добавляем легенду
-    legend_y = h - 20
-    cv2.putText(frame, "Blue: Dijkstra (thick)", (10, legend_y - 45),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
-    cv2.putText(frame, "Green: Spline (medium)", (10, legend_y - 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-    cv2.putText(frame, "Red: Refined (thin)", (10, legend_y - 15),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
-
     return frame
